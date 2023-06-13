@@ -1,21 +1,31 @@
-name: Rust
+name: Cargo
 
 on:
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
+  - push
+  - pull_request
 
 env:
+  RUST_LOG: debug
+  CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
+  CI: "1"
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v3
-      - name: Build
-        run: cargo build --verbose
+
+      - id: component
+        uses: actions-rs/components-nightly@v1
+        with:
+          component: clippy
+
+      - uses: actions-rs/toolchain@v1
+        with:
+            override: true
+            toolchain: ${{ steps.component.outputs.toolchain }}
+
       - name: Run tests
         run: cargo test --verbose
