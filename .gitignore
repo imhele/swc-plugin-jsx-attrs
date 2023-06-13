@@ -1,0 +1,8 @@
+# production
+/target
+^target/
+target
+
+# local
+*.local.*
+.DS_Store

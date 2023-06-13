@@ -1,0 +1,5 @@
+{
+  "@fixture/my-components": {
+    "Dropdown.Link": [{ "name": "type", "rule": "prepend", "value": "primary" }]
+  }
+}

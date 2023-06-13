@@ -1,0 +1,5 @@
+{
+  "@fixture/my-components": {
+    "Button": [{ "name": "type", "rule": "prepend", "value": "primary" }]
+  }
+}
