@@ -5,9 +5,10 @@ use swc_core::{
     common::{chain, Mark},
     ecma::{
         parser::{Syntax, TsConfig},
-        transforms::{base, testing::test_fixture},
+        transforms::{base::resolver, testing::test_fixture},
     },
 };
+use swc_plugin_jsx_attrs::{config::Config, transform::transform as jsx_attrs_transform};
 
 #[testing::fixture("tests/fixture/**/input.tsx")]
 fn test(input: PathBuf) {
@@ -21,15 +22,11 @@ fn test(input: PathBuf) {
         &|_| {
             chain!(
                 // This transformer analyze and inject syntax contexts.
-                base::resolver(Mark::new(), Mark::new(), true),
-                swc_plugin_jsx_attrs::transform::transform(
-                    swc_plugin_jsx_attrs::transform::Config {
-                        inject: serde_json::from_reader(BufReader::new(
-                            File::open(&config).unwrap()
-                        ))
+                resolver(Mark::new(), Mark::new(), true),
+                jsx_attrs_transform(Config {
+                    inject: serde_json::from_reader(BufReader::new(File::open(&config).unwrap()))
                         .unwrap(),
-                    }
-                )
+                })
             )
         },
         &input,

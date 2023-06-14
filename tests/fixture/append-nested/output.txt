@@ -5,11 +5,11 @@ export function MyPage() {
 
       <Noop onClick={console.log}/>
 
-      <Dropdown.Link type={"primary"} onClick={console.log}/>
+      <Dropdown.Link onClick={console.log} type={"primary"}/>
 
       <components.Noop onClick={console.log}/>
 
-      <components.Dropdown.Link type={"primary"} onClick={console.log}/>
+      <components.Dropdown.Link onClick={console.log} type={"primary"}/>
 
     </>;
 }

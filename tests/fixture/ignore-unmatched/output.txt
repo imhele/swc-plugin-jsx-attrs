@@ -3,9 +3,9 @@ import { Button as MyButton, Link } from "@fixture/my-components";
 export function MyPage() {
     return <>
 
-      <Link type={"primary"}/>
+      <Link onClick={console.log} type={"primary"}/>
 
-      <MyButton type={"primary"}/>
+      <MyButton type={"primary"} onClick={console.log}/>
 
     </>;
 }
@@ -13,11 +13,16 @@ export function createPage() {
     function Link() {
         return null;
     }
+    function MyButton() {
+        return null;
+    }
     return ()=><>
 
-      <Link/>
+      <Link onClick={console.log}/>
 
-      <Button/>
+      <Button onClick={console.log}/>
+
+      <MyButton onClick={console.log}/>
 
     </>;
 }

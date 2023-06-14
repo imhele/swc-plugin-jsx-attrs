@@ -8,20 +8,29 @@
 
 ### 基础用法
 
+单个组件可以注入多个属性，默认前置追加，也可以通过配置 `rule: append` 追加到尾部。
+
 ```json
 {
   "@fixture/my-components": {
-    "Button": [{ "name": "type", "rule": "prepend", "value": "primary" }]
+    "Button": [{ "name": "type", "value": "primary" }],
+    "Link": [{ "name": "type", "rule": "append", "value": "primary" }]
   }
 }
 ```
 
 ```diff
-  import { Button } from "@fixture/my-components";
+  import { Button, Link } from "@fixture/my-components";
 
   export function MyPage() {
--   return <Button />;
-+   return <Button type={"primary"} />;
+    return (
+      <>
+-       <Button onClick={console.log} />
++       <Button type={"primary"} onClick={console.log} />
+-       <Link href="/" />
++       <Link href="/" type={"primary"} />
+      </>
+    );
   }
 ```
 
@@ -30,7 +39,7 @@
 ```json
 {
   "@fixture/my-components": {
-    "Dropdown.Link": [{ "name": "type", "rule": "prepend", "value": "primary" }]
+    "Dropdown.Link": [{ "name": "type", "value": "primary" }]
   }
 }
 ```
@@ -58,8 +67,8 @@
 ```json
 {
   "@fixture/my-components": {
-    "Button": [{ "name": "type", "rule": "prepend", "value": "primary" }],
-    "Link": [{ "name": "type", "rule": "prepend", "value": "primary" }]
+    "Button": [{ "name": "type", "value": "primary" }],
+    "Link": [{ "name": "type", "value": "primary" }]
   }
 }
 ```

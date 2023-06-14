@@ -1,4 +1,4 @@
 import { Button } from "@fixture/my-components";
 export function MyPage() {
-    return <Button type={"primary"} onClick={console.log}/>;
+    return <Button onClick={console.log} type={"primary"}/>;
 }

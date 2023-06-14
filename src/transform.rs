@@ -1,68 +1,11 @@
+use crate::config;
 use crate::utils::json_to_es_ast::json_to_es_ast;
-use std::collections::HashMap;
 use swc_core::{
     cached::regex::CachedRegex,
     common::DUMMY_SP,
     ecma::visit::Fold,
     ecma::{ast::*, visit::FoldWith},
 };
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Config {
-    pub inject: HashMap<String, HashMap<String, Vec<InjectAttr>>>,
-}
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InjectAttr {
-    /// jsx attribute name
-    pub name: String,
-    /// inject rule
-    pub rule: InjectRule,
-    /// jsx attribute value
-    pub value: serde_json::Value,
-    /// ast cache of jsx attribute value
-    #[serde(skip)]
-    value_ast_cache: Option<Box<Expr>>,
-}
-
-impl InjectAttr {
-    fn create_value_ast(&mut self) -> Box<Expr> {
-        match &self.value_ast_cache {
-            Some(ast) => ast.clone(),
-            None => {
-                let ast = json_to_es_ast(&self.value);
-                self.value_ast_cache = Some(ast.clone());
-                ast
-            }
-        }
-    }
-
-    fn inject_attr(&mut self, attrs: &mut Vec<JSXAttrOrSpread>) {
-        match &self.rule {
-            InjectRule::Prepend => {
-                let attr = JSXAttr {
-                    name: JSXAttrName::Ident(Ident::new(self.name.clone().into(), DUMMY_SP)),
-                    span: DUMMY_SP,
-                    value: Some(JSXAttrValue::JSXExprContainer(JSXExprContainer {
-                        expr: JSXExpr::Expr(self.create_value_ast()),
-                        span: DUMMY_SP,
-                    })),
-                };
-                attrs.insert(0, attr.into());
-            }
-        }
-    }
-}
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum InjectRule {
-    // Append,
-    Prepend,
-    // Replace,
-}
 
 #[derive(Debug)]
 struct ImportedCompRef {
@@ -72,6 +15,64 @@ struct ImportedCompRef {
     sub: Vec<String>,
     /// jsx attributes
     attrs: Vec<InjectAttr>,
+}
+
+#[derive(Debug)]
+struct InjectAttr {
+    cfg: config::InjectAttrConfig,
+    value_ast_cache: Option<Box<Expr>>,
+}
+
+impl InjectAttr {
+    fn create_attr(&mut self) -> JSXAttr {
+        let expr = match &self.value_ast_cache {
+            Some(ast) => ast.clone(),
+            None => {
+                let ast = json_to_es_ast(&self.cfg.value);
+                self.value_ast_cache = Some(ast.clone());
+                ast
+            }
+        };
+        let expr = JSXExprContainer {
+            expr: JSXExpr::Expr(expr),
+            span: DUMMY_SP,
+        };
+        JSXAttr {
+            name: Ident::new(self.cfg.name.clone().into(), DUMMY_SP).into(),
+            span: DUMMY_SP,
+            value: Some(expr.into()),
+        }
+    }
+
+    fn inject_attr(&mut self, attrs: &mut Vec<JSXAttrOrSpread>) {
+        match &self.cfg.rule {
+            config::InjectAttrRule::Append => attrs.push(self.create_attr().into()),
+            config::InjectAttrRule::Prepend => attrs.insert(0, self.create_attr().into()),
+        }
+    }
+}
+
+impl Clone for InjectAttr {
+    fn clone(&self) -> Self {
+        InjectAttr {
+            cfg: self.cfg.clone(),
+            value_ast_cache: None,
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.cfg.clone_from(&source.cfg);
+        self.value_ast_cache = None;
+    }
+}
+
+impl From<config::InjectAttrConfig> for InjectAttr {
+    fn from(cfg: config::InjectAttrConfig) -> Self {
+        InjectAttr {
+            cfg,
+            value_ast_cache: None,
+        }
+    }
 }
 
 struct InjectComp {
@@ -128,9 +129,9 @@ impl InjectComp {
 }
 
 struct InjectPkg {
-    // import source regex pattern
+    /// import source regex pattern
     import: CachedRegex,
-    // target components
+    /// target components
     comps: Vec<InjectComp>,
 }
 
@@ -150,6 +151,26 @@ impl InjectPkg {
 struct FoldJSXAttrs {
     imported_refs: Vec<ImportedCompRef>,
     inject_config: Vec<InjectPkg>,
+}
+
+impl FoldJSXAttrs {
+    fn flat_jsx_element_name(name: &JSXElementName) -> Option<(Id, Vec<String>)> {
+        match name {
+            JSXElementName::Ident(name) => Some((name.to_id(), vec![])),
+            JSXElementName::JSXMemberExpr(name) => {
+                let mut sub = vec![];
+                let mut expr = name;
+                loop {
+                    sub.insert(0, expr.prop.sym.to_string());
+                    match &expr.obj {
+                        JSXObject::Ident(end) => break Some((end.to_id(), sub)),
+                        JSXObject::JSXMemberExpr(next) => expr = next,
+                    }
+                }
+            }
+            _ => None,
+        }
+    }
 }
 
 impl Fold for FoldJSXAttrs {
@@ -173,39 +194,25 @@ impl Fold for FoldJSXAttrs {
     }
 
     fn fold_jsx_opening_element(&mut self, mut node: JSXOpeningElement) -> JSXOpeningElement {
-        let name: Option<(Id, Vec<String>)> = match &node.name {
-            JSXElementName::Ident(name) => Some((name.to_id(), vec![])),
-            JSXElementName::JSXMemberExpr(member) => {
-                let mut sub = vec![];
-                let mut expr = member;
-                loop {
-                    sub.insert(0, expr.prop.sym.to_string());
-                    match &expr.obj {
-                        JSXObject::Ident(end) => {
-                            break Some((end.to_id(), sub));
-                        }
-                        JSXObject::JSXMemberExpr(next) => {
-                            expr = next;
+        if !self.imported_refs.is_empty() {
+            match FoldJSXAttrs::flat_jsx_element_name(&node.name) {
+                Some((id, sub)) => {
+                    for imp_ref in &mut self.imported_refs {
+                        if (imp_ref.id == id) && (imp_ref.sub == sub) {
+                            for attr in &mut imp_ref.attrs {
+                                attr.inject_attr(&mut node.attrs);
+                            }
                         }
                     }
                 }
-            }
-            _ => None,
-        };
-        if let Some((id, sub)) = name {
-            for imp_ref in &mut self.imported_refs {
-                if (imp_ref.id == id) && (imp_ref.sub == sub) {
-                    for attr in &mut imp_ref.attrs {
-                        attr.inject_attr(&mut node.attrs);
-                    }
-                }
-            }
+                _ => {}
+            };
         }
         node.fold_children_with(self)
     }
 }
 
-pub fn transform(config: Config) -> impl Fold {
+pub fn transform(config: config::Config) -> impl Fold {
     FoldJSXAttrs {
         imported_refs: vec![],
         inject_config: config
@@ -218,7 +225,7 @@ pub fn transform(config: Config) -> impl Fold {
                     .into_iter()
                     .map(|(ref member, attrs)| InjectComp {
                         paths: member.split('.').map(|x| x.to_string()).collect(),
-                        attrs,
+                        attrs: attrs.into_iter().map(|attr| attr.into()).collect(),
                     })
                     .collect(),
             })
