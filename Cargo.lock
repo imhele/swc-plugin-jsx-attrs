@@ -1631,7 +1631,7 @@ dependencies = [
 
 [[package]]
 name = "swc_plugin_jsx_attrs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "regex",
  "serde",

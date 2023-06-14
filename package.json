@@ -1,6 +1,6 @@
 {
   "name": "swc-plugin-jsx-attrs",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "SWC plugin for JSX attrs",
   "keywords": [
     "swc-plugin"
